@@ -1,5 +1,7 @@
 # app/main.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from app.core.database import engine, check_db_connection
 from app.models.base import Base  # Base model ကို import လုပ်ခြင်းဖြင့် metadata ကို Alembic အတွက် ပြင်ဆင်ပေးတယ်။
 from app.api.v1.router import router as v1_router
@@ -8,6 +10,14 @@ app = FastAPI(
     title="Bus Ticket System",
     version="1.0.0",
     description="Production Ready Bus Booking API"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ============================================

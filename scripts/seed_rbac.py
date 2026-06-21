@@ -14,6 +14,15 @@ PERMISSIONS = [
     {"name": "users:read", "resource": "users", "action": "read"},
     {"name": "users:write", "resource": "users", "action": "write"},
     {"name": "users:delete", "resource": "users", "action": "delete"},
+    
+    # ========== Roles & Permissions Management (NEW) ==========
+    {"name": "roles:read", "resource": "roles", "action": "read"},
+    {"name": "roles:write", "resource": "roles", "action": "write"},
+    {"name": "roles:delete", "resource": "roles", "action": "delete"},
+    {"name": "permissions:read", "resource": "permissions", "action": "read"},
+    {"name": "permissions:write", "resource": "permissions", "action": "write"},
+    {"name": "permissions:delete", "resource": "permissions", "action": "delete"},
+    
     # Bus Management
     {"name": "buses:read", "resource": "buses", "action": "read"},
     {"name": "buses:write", "resource": "buses", "action": "write"},

@@ -1,7 +1,7 @@
+import json
 from typing import List
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
-import os
+from pydantic import Field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = Field(60, env="RATE_LIMIT_PER_MINUTE")
     
     # CORS
-    ALLOWED_ORIGINS: List[str] = Field(["http://localhost:3000", "http://localhost:8000"], env="ALLOWED_ORIGINS")
+    ALLOWED_ORIGINS: str = Field(
+        "http://localhost:3000,http://localhost:8000,http://localhost:5173",
+        env="ALLOWED_ORIGINS",
+    )
     
     # Sentry
     SENTRY_DSN: str = Field("", env="SENTRY_DSN")
@@ -50,12 +53,12 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
     LOG_FILE: str = Field("app.log", env="LOG_FILE")
     
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+    @property
+    def allowed_origins(self) -> List[str]:
+        value = self.ALLOWED_ORIGINS.strip()
+        if value.startswith("["):
+            return json.loads(value)
+        return [origin.strip() for origin in value.split(",") if origin.strip()]
     
     class Config:
         env_file = ".env"

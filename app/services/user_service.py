@@ -3,10 +3,19 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select
 
 from app.repositories.user_repository import UserRepository
-from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse
+from app.schemas.user import (
+    StaffUserCreate,
+    UserCreate,
+    UserUpdate,
+    UserLogin,
+    UserResponse,
+)
 from app.models.user import User
+from app.models.role import Role
+from app.models.user_role import user_roles
 from app.core.security import (
     get_password_hash,
     verify_password,
@@ -57,6 +66,7 @@ class UserService:
         # 3. Prepare user data for creation
         user_dict = user_data.model_dump(exclude={"password"})
         user_dict["hashed_password"] = hashed_password
+        user_dict["account_type"] = "customer"
 
         # 4. Create user in database
         try:
@@ -77,6 +87,28 @@ class UserService:
             "refresh_token": refresh_token,
             "token_type": "bearer",
         }
+
+    async def create_staff_user(self, user_data: StaffUserCreate) -> UserResponse:
+        """
+        Create a dashboard staff user and optionally assign roles.
+        """
+        existing_user = await self.repo.get_by_email(user_data.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this email already exists",
+            )
+
+        user_dict = user_data.model_dump(exclude={"password", "role_ids"})
+        user_dict["hashed_password"] = get_password_hash(user_data.password)
+
+        new_user = await self.repo.create(user_dict)
+
+        if user_data.role_ids:
+            await self.assign_roles(new_user.id, user_data.role_ids)
+            await self.db.refresh(new_user)
+
+        return UserResponse.model_validate(new_user)
 
     async def login_user(self, login_data=UserLogin) -> Dict[str, Any]:
         """
@@ -235,6 +267,77 @@ class UserService:
             )
 
         return UserResponse.model_validate(updated_user)
+
+    async def assign_roles(self, user_id: UUID, role_ids: List[UUID]) -> User:
+        """
+        Replace all roles for a user.
+        """
+        unique_role_ids = list(dict.fromkeys(role_ids))
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if unique_role_ids:
+            stmt = select(Role.id).where(Role.id.in_(unique_role_ids))
+            result = await self.db.execute(stmt)
+            found_ids = result.scalars().all()
+            if len(found_ids) != len(unique_role_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="One or more role IDs are invalid",
+                )
+
+        await self.db.execute(
+            delete(user_roles).where(user_roles.c.user_id == user_id)
+        )
+
+        for role_id in unique_role_ids:
+            await self.db.execute(
+                user_roles.insert().values(user_id=user_id, role_id=role_id)
+            )
+
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def search_users(
+        self,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+        include_inactive: bool = False,
+        is_verified: Optional[bool] = None,
+        account_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Search users with pagination and filters.
+        """
+        users = await self.repo.search_users(
+            search=search,
+            skip=skip,
+            limit=limit,
+            include_inactive=include_inactive,
+            is_verified=is_verified,
+            account_type=account_type,
+        )
+        total = await self.repo.count_search_user(
+            search=search,
+            include_inactive=include_inactive,
+            is_verified=is_verified,
+            account_type=account_type,
+        )
+        
+        return {
+            "items": [UserResponse.model_validate(user) for user in users],
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + limit) < total,
+        }
+        
 
     async def list_users(
         self,

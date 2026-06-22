@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Index,Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Index, Boolean
 from sqlalchemy.sql import func
 from app.models.base import BaseModel
 from sqlalchemy.orm import relationship
@@ -31,6 +31,13 @@ class User(BaseModel):
         comment="Bypass all permissions? (Super Admin)"
     )
 
+    account_type = Column(
+        String(20),
+        default="customer",
+        nullable=False,
+        comment="Account type: customer or staff"
+    )
+
     # ========== Timestamps (Extra) ==========
     last_login = Column(
         DateTime(timezone=True),
@@ -55,6 +62,7 @@ class User(BaseModel):
     # ========== Indexes for Performance ==========
     __table_args__ = (
         Index("ix_users_email_active", "email", "is_active"),  # Login query မြန်ဆန်စေရန်
+        Index("ix_users_account_type", "account_type"),
     )
 
     def __repr__(self):

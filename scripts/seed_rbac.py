@@ -22,6 +22,7 @@ PERMISSIONS = [
     {"name": "permissions:read", "resource": "permissions", "action": "read"},
     {"name": "permissions:write", "resource": "permissions", "action": "write"},
     {"name": "permissions:delete", "resource": "permissions", "action": "delete"},
+    {"name": "dashboard:access", "resource": "dashboard", "action": "access"},
     
     # Bus Management
     {"name": "buses:read", "resource": "buses", "action": "read"},
@@ -51,6 +52,20 @@ ROLES = {
         "description": "Super Administrator - Full system access",
         "is_default": False,
         "permissions": [p["name"] for p in PERMISSIONS]
+    },
+    "manager": {
+        "description": "Manager - Dashboard staff with operational management access",
+        "is_default": False,
+        "permissions": [
+            "dashboard:access",
+            "users:read",
+            "buses:read", "buses:write",
+            "routes:read", "routes:write",
+            "schedules:read", "schedules:write",
+            "bookings:read",
+            "payments:read",
+            "reports:read"
+        ]
     },
     "admin": {
         "description": "Administrator - Can manage users, buses, routes",
@@ -168,6 +183,15 @@ async def assign_super_admin(user_email: str):
             return
         
         user_id = user_row[0]
+
+        await session.execute(
+            text(
+                "UPDATE users "
+                "SET account_type = 'staff', is_superuser = true "
+                "WHERE id = :user_id"
+            ),
+            {"user_id": user_id}
+        )
         
         # Get super_admin role
         result = await session.execute(
@@ -186,6 +210,7 @@ async def assign_super_admin(user_email: str):
             {"user_id": user_id, "role_id": role_id}
         )
         if result.first():
+            await session.commit()
             print(f"✅ {user_email} is already a Super Admin!")
             return
         

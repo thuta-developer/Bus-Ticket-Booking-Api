@@ -41,6 +41,21 @@ class RoleResponse(RoleBase):
         from_attributes = True
 
 
+class RoleListResponse(BaseModel):
+    """Paginated role list response"""
+    items: List[RoleResponse]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool
+
+
+class RoleListEnvelopeResponse(BaseModel):
+    """Standard wrapped paginated role list response"""
+    status: str
+    data: RoleListResponse
+
+
 # Import here to avoid circular import
 from app.schemas.permission import PermissionResponse
 RoleResponse.model_rebuild()

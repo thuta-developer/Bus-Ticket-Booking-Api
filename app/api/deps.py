@@ -120,6 +120,24 @@ async def get_current_superuser(
     return current_user
 
 
+async def get_current_staff_user(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Dashboard/API admin area requires a staff account.
+    Superusers bypass this check so the first owner account is never locked out.
+    """
+    if current_user.is_superuser:
+        return current_user
+
+    if current_user.account_type != "staff":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard access requires a staff account.",
+        )
+    return current_user
+
+
 # ============================================
 # 6. Optional Current User (For public APIs)
 # ============================================
@@ -150,6 +168,7 @@ async def get_optional_current_user(
 
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
 CurrentSuperuser = Annotated[User, Depends(get_current_superuser)]
+CurrentStaffUser = Annotated[User, Depends(get_current_staff_user)]
 OptionalCurrentUser = Annotated[Optional[User], Depends(get_optional_current_user)]
 
 
@@ -187,6 +206,23 @@ def require_permission(permission_name: str):
     """
     async def permission_dependency(
         current_user: User = Depends(get_current_active_user),
+    ) -> User:
+        if not await has_permission(current_user, permission_name):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Not enough permissions. Required: '{permission_name}'"
+            )
+        return current_user
+    return permission_dependency
+
+
+def require_staff_permission(permission_name: str):
+    """
+    Dependency Factory for dashboard/admin endpoints.
+    Requires staff account first, then the specific permission.
+    """
+    async def permission_dependency(
+        current_user: User = Depends(get_current_staff_user),
     ) -> User:
         if not await has_permission(current_user, permission_name):
             raise HTTPException(

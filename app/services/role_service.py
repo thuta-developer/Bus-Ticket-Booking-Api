@@ -1,8 +1,8 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 
 from app.models.role import Role
 from app.models.permission import Permission
@@ -13,10 +13,21 @@ class RoleService:
     def __init__(self, db: AsyncSession):
         self.db = db
         
-    async def get_all(self, skip: int = 0 , limit: int = 100) -> List[Role]:
-        stmt = select(Role).offset(skip).limit(limit).order_by(Role.name)
+    async def get_all(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        stmt = select(Role).order_by(Role.name).offset(skip).limit(limit)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        roles = result.scalars().all()
+
+        total_result = await self.db.execute(select(func.count()).select_from(Role))
+        total = total_result.scalar_one()
+
+        return {
+            "items": [RoleResponse.model_validate(role) for role in roles],
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + limit) < total,
+        }
     
     async def get_by_id(self, role_id: UUID) -> Optional[Role]:
         stmt = select(Role).where(Role.id == role_id)
@@ -130,5 +141,3 @@ class RoleService:
                     permission_id=perm_id
                 )
                 await self.db.execute(stmt)
-
-

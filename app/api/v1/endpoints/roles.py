@@ -1,12 +1,16 @@
-from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.user import User
-from app.api.deps import require_permission
-from app.schemas.role import RoleCreate, RoleUpdate, RoleResponse
+from app.api.deps import require_staff_permission
+from app.schemas.role import (
+    RoleCreate,
+    RoleUpdate,
+    RoleResponse,
+    RoleListEnvelopeResponse,
+)
 from app.services.role_service import RoleService
 
 router = APIRouter(
@@ -21,19 +25,19 @@ router = APIRouter(
 
 @router.get(
     "/",
-    response_model=List[RoleResponse],
+    response_model=RoleListEnvelopeResponse,
     status_code=status.HTTP_200_OK,
     summary="Get all roles",
 )
 async def get_roles(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(require_permission("roles:read")),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
+    current_user: User = Depends(require_staff_permission("roles:read")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)
     result = await service.get_all(skip, limit)
-    return result
+    return {"status": "success", "data": result}
 
 
 @router.get(
@@ -44,7 +48,7 @@ async def get_roles(
 )
 async def get_role(
     role_id: UUID,
-    current_user: User = Depends(require_permission("roles:read")),
+    current_user: User = Depends(require_staff_permission("roles:read")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)
@@ -64,7 +68,7 @@ async def get_role(
 )
 async def create_role(
     role_data: RoleCreate,
-    current_user: User = Depends(require_permission("roles:write")),
+    current_user: User = Depends(require_staff_permission("roles:write")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)
@@ -81,7 +85,7 @@ async def create_role(
 async def update_role(
     role_id: UUID,
     role_data: RoleUpdate,
-    current_user: User = Depends(require_permission("roles:write")),
+    current_user: User = Depends(require_staff_permission("roles:write")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)
@@ -96,7 +100,7 @@ async def update_role(
 )
 async def delete_role(
     role_id: UUID,
-    current_user: User = Depends(require_permission("roles:delete")),
+    current_user: User = Depends(require_staff_permission("roles:delete")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)

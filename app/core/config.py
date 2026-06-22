@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field("development", env="ENVIRONMENT")
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(1440, env="ACCESS_TOKEN_EXPIRE_MINUTES")
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")
     
     # Database

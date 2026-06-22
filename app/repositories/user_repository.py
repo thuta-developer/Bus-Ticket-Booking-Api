@@ -1,8 +1,10 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql import func
+
 
 from app.models.user import User
 from app.core.database import get_db
@@ -69,6 +71,86 @@ class UserRepository:
         stmt = select(User).where(and_(User.email.ilike(email), User.is_active == True))
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+    
+    
+    async def search_users(
+    self,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    include_inactive: bool = False,
+    is_verified: Optional[bool] = None,
+    account_type: Optional[str] = None,
+
+    ) -> List[User]:
+        """
+        Search users by email or full_name with pagination.
+        """
+        stmt = select(User)
+        
+        # 1. Base filter: active/inactive
+        if not include_inactive:
+            stmt = stmt.where(User.is_active == True)
+
+        # 2. Optional verified filter
+        if is_verified is not None:
+            stmt = stmt.where(User.is_verified == is_verified)
+
+        if account_type is not None:
+            stmt = stmt.where(User.account_type == account_type)
+            
+        # 3. Search Filter (case-insensitive)
+        if search:
+            stmt = stmt.where(
+                or_(
+                    User.email.ilike(f"%{search}%"),
+                    User.full_name.ilike(f"%{search}%"),
+                )
+            )
+
+        # 4. Order by created_at (newest first)
+        stmt = stmt.order_by(User.created_at.desc())
+        
+        # 5. Pagination
+        stmt = stmt.offset(skip).limit(limit)
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def count_search_user(
+        self,
+        search: Optional[str] = None,
+        include_inactive: bool = False,
+        is_verified: Optional[bool] = None,
+        account_type: Optional[str] = None,
+    ) -> int:
+        """
+        Count total users matching search (for pagination metadata).
+        """
+        stmt = select(func.count(User.id))
+        
+        if not include_inactive:
+            stmt = stmt.where(User.is_active == True)
+
+        if is_verified is not None:
+            stmt = stmt.where(User.is_verified == is_verified)
+
+        if account_type is not None:
+            stmt = stmt.where(User.account_type == account_type)
+            
+        if search:
+            search_term = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    User.email.ilike(search_term),
+                    User.full_name.ilike(search_term)
+                )
+            )
+
+        result = await self.db.execute(stmt)
+        return result.scalar()
+
+        
+        
     
     async def get_all_users(
         self,

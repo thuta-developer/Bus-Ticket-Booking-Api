@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.user import User
-from app.api.deps import require_permission
+from app.api.deps import require_staff_permission
 from app.schemas.permission import PermissionCreate, PermissionUpdate, PermissionResponse
 from app.services.permission_service import PermissionService
 
@@ -27,7 +27,7 @@ router = APIRouter(
 async def get_permissions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(require_permission("permissions:read")),
+    current_user: User = Depends(require_staff_permission("permissions:read")),
     db: AsyncSession = Depends(get_db),
 ):
     service = PermissionService(db)
@@ -41,7 +41,7 @@ async def get_permissions(
 )
 async def get_permission(
     permission_id: UUID,
-    current_user: User = Depends(require_permission("permissions:read")),
+    current_user: User = Depends(require_staff_permission("permissions:read")),
     db: AsyncSession = Depends(get_db),
 ):
     service = PermissionService(db)
@@ -61,7 +61,7 @@ async def get_permission(
 )
 async def create_permission(
     perm_data: PermissionCreate,
-    current_user: User = Depends(require_permission("permissions:write")),
+    current_user: User = Depends(require_staff_permission("permissions:write")),
     db: AsyncSession = Depends(get_db),
 ):
     service = PermissionService(db)
@@ -76,7 +76,7 @@ async def create_permission(
 async def update_permission(
     permission_id: UUID,
     perm_data: PermissionUpdate,
-    current_user: User = Depends(require_permission("permissions:write")),
+    current_user: User = Depends(require_staff_permission("permissions:write")),
     db: AsyncSession = Depends(get_db),
 ):
     service = PermissionService(db)
@@ -89,7 +89,7 @@ async def update_permission(
 )
 async def delete_permission(
     permission_id: UUID,
-    current_user: User = Depends(require_permission("permissions:delete")),
+    current_user: User = Depends(require_staff_permission("permissions:delete")),
     db: AsyncSession = Depends(get_db),
 ):
     service = PermissionService(db)

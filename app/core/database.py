@@ -1,11 +1,11 @@
 # app/core/database.py
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
     async_sessionmaker,
     AsyncEngine
 )
-from sqlalchemy.orm import sessionmaker
 from typing import AsyncGenerator
 from app.core.config import settings
 
@@ -55,7 +55,7 @@ async def check_db_connection() -> bool:
     """Database ဆက်သွယ်မှု အသက်ရှိမရှိ စစ်ဆေးရန်"""
     try:
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False

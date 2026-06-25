@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,13 +31,18 @@ router = APIRouter(
     summary="Get all roles",
 )
 async def get_roles(
+    search: Optional[str] = Query(
+        None,
+        min_length=1,
+        description="Search roles by name or description",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     current_user: User = Depends(require_staff_permission("roles:read")),
     db: AsyncSession = Depends(get_db),
 ):
     service = RoleService(db)
-    result = await service.get_all(skip, limit)
+    result = await service.get_all(search=search, skip=skip, limit=limit)
     return {"status": "success", "data": result}
 
 
@@ -55,10 +61,10 @@ async def get_role(
     role = await service.get_by_id(role_id)
     if not role:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
     return role
+
 
 @router.post(
     "/",
@@ -107,7 +113,6 @@ async def delete_role(
     deleted = await service.delete(role_id)
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
         )
     return None

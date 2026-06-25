@@ -141,22 +141,16 @@ async def update_user(
             detail="Only super admin can change superuser status",
         )
 
-    # Update user
-    if update_dict:
-        updated_user = await service.repo.update(user_id, update_dict)
-        if not updated_user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User with ID {user_id} not found",
-            )
-
-    if role_ids is not None:
-        updated_user = await service.assign_roles(user_id, role_ids)
+    updated_user = await service.admin_update_user(
+        user_id,
+        update_dict,
+        role_ids=role_ids,
+    )
 
     return {
         "status": "success",
         "message": "User updated successfully",
-        "data": UserResponse.model_validate(updated_user),
+        "data": updated_user,
     }
 
 
@@ -181,7 +175,7 @@ async def delete_user(
     Delete a user. 'hard_delete=True' will permanently remove the record (use with caution).
     """
     service = UserService(db)
-    await service.delete_user(user_id, hard_delete)
+    await service.delete_user(user_id, actor=current_user, hard_delete=hard_delete)
     return {
         "status": "success",
         "message": f"User {'hard ' if hard_delete else 'soft '}deleted successfully",

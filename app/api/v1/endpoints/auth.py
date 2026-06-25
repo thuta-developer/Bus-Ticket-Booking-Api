@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenRefresh
 from app.services.user_service import UserService
-from app.api.deps import CurrentUser, get_current_active_user
+from app.api.deps import CurrentUser
 
 
 # ============================================
@@ -82,17 +81,16 @@ async def login(
     description="Get a new access token using a valid refresh token."
 )
 async def refresh_token(
-    refresh_token: str,
-    db: AsyncSession = Depends(get_db)
+    body: TokenRefresh,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Refresh an expired access token.
-    
-    - **refresh_token**: Valid refresh token string
+
+    Pass the refresh token in the JSON request body (not as a query parameter).
     """
     service = UserService(db)
-    result = await service.refresh_access_token(refresh_token)
-    return result
+    return await service.refresh_access_token(body.refresh_token)
 
 
 # ============================================

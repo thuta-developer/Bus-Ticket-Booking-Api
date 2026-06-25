@@ -65,6 +65,11 @@ class UserLogin(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     password: str = Field(..., description="User's password")
 
+
+class TokenRefresh(BaseModel):
+    """Request body for refreshing an access token."""
+    refresh_token: str = Field(..., min_length=1, description="Valid refresh token")
+
             
         
 # ============================================

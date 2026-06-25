@@ -1,13 +1,13 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from sqlalchemy import select, update, and_, or_
+from sqlalchemy import select, update, delete, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import func
 
-
 from app.models.user import User
-from app.core.database import get_db
+from app.models.role import Role
 
 
 class UserRepository:
@@ -40,7 +40,22 @@ class UserRepository:
         stmt = select(User).where(User.id == user_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
-    
+
+    async def get_by_id_with_roles_and_permissions(
+        self, user_id: UUID
+    ) -> Optional[User]:
+        """
+        Load user with roles and permissions in batched selectin queries.
+        Use for authenticated requests that may perform RBAC checks.
+        """
+        stmt = (
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_email(self, email: str) -> Optional[User]:
         """
         Get a user by their email address (case-insensitive search).
@@ -150,7 +165,6 @@ class UserRepository:
         return result.scalar()
 
         
-        
     
     async def get_all_users(
         self,
@@ -251,25 +265,15 @@ class UserRepository:
         Returns:
             Updated User object if found, else None
         """
-        # ဦးဆုံး user ရှိမရှိစစ်ပါ
-        user = await self.get_by_id(user_id)
-        if not user:
-            return None
-
-        # Update fields
         stmt = (
             update(User)
             .where(User.id == user_id)
             .values(**update_data)
-            .returning(User)  # PostgreSQL supports RETURNING
+            .returning(User)
         )
-        
         result = await self.db.execute(stmt)
         await self.db.commit()
-        
-        # RETURNING ရလာတဲ့ result ကို refresh မလိုဘဲ ပြန်ယူလို့ရတယ်
-        updated_user = result.scalar_one_or_none()
-        return updated_user
+        return result.scalar_one_or_none()
     
     async def update_last_login(self, user_id: UUID) -> None:
         """
@@ -300,10 +304,6 @@ class UserRepository:
         """
         from sqlalchemy.sql import func
         
-        user = await self.get_by_id(user_id)
-        if not user:
-            return None
-
         stmt = (
             update(User)
             .where(User.id == user_id)
@@ -327,37 +327,24 @@ class UserRepository:
         Returns:
             True if deleted, False if user not found
         """
-        user = await self.get_by_id(user_id)
-        if not user:
-            return False
-
         stmt = (
             update(User)
             .where(User.id == user_id)
             .values(is_active=False)
         )
-        await self.db.execute(stmt)
+        result = await self.db.execute(stmt)
         await self.db.commit()
-        return True
-    
+        return result.rowcount > 0
+
     async def hard_delete(self, user_id: UUID) -> bool:
         """
         Permanently delete a user from the database.
         Use with caution! Usually we use soft_delete instead.
-        
-        Args:
-            user_id: UUID of the user
-            
-        Returns:
-            True if deleted, False if user not found
         """
-        user = await self.get_by_id(user_id)
-        if not user:
-            return False
-
-        await self.db.delete(user)
+        stmt = delete(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
         await self.db.commit()
-        return True
+        return result.rowcount > 0
 
 
 

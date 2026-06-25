@@ -33,7 +33,8 @@ class Role(BaseModel):
     users = relationship(
         "User",
         secondary=user_roles,
-        back_populates="roles"
+        back_populates="roles",
+        lazy="selectin",
     )
 
     permissions = relationship(

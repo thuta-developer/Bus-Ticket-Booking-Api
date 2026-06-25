@@ -71,10 +71,16 @@ class UserService:
         # 4. Create user in database
         try:
             new_user = await self.repo.create(user_dict)
-        except Exception as e:
+        except ValueError as exc:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-            )
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user",
+            ) from exc
 
         # 5. Generate tokens for auto-login after registration
         access_token = create_access_token(data={"sub": str(new_user.id)})
@@ -130,7 +136,7 @@ class UserService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # 2. Verify passowrd
+        # 2. Verify password
         if not verify_password(login_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -138,7 +144,7 @@ class UserService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # 3. Update last_login
+        # 3. Update last_login and refresh user object
         await self.repo.update_last_login(user.id)
         await self.db.refresh(user)
 
@@ -294,13 +300,19 @@ class UserService:
             delete(user_roles).where(user_roles.c.user_id == user_id)
         )
 
-        for role_id in unique_role_ids:
+        if unique_role_ids:
             await self.db.execute(
-                user_roles.insert().values(user_id=user_id, role_id=role_id)
+                user_roles.insert(),
+                [{"user_id": user_id, "role_id": role_id} for role_id in unique_role_ids],
             )
 
         await self.db.commit()
-        await self.db.refresh(user)
+        user = await self.repo.get_by_id_with_roles_and_permissions(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
         return user
 
     async def search_users(
@@ -358,19 +370,66 @@ class UserService:
             "limit": limit,
         }
 
-    async def delete_user(self, user_id: UUID, hard_delete: bool = False) -> None:
+    async def admin_update_user(
+        self,
+        user_id: UUID,
+        update_dict: Dict[str, Any],
+        role_ids: Optional[List[UUID]] = None,
+    ) -> UserResponse:
+        updated_user = None
+
+        if update_dict:
+            updated_user = await self.repo.update(user_id, update_dict)
+            if not updated_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User with ID {user_id} not found",
+                )
+
+        if role_ids is not None:
+            updated_user = await self.assign_roles(user_id, role_ids)
+
+        if updated_user is None:
+            updated_user = await self.repo.get_by_id(user_id)
+            if not updated_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User with ID {user_id} not found",
+                )
+
+        return UserResponse.model_validate(updated_user)
+
+    async def delete_user(
+        self,
+        user_id: UUID,
+        *,
+        actor: User,
+        hard_delete: bool = False,
+    ) -> None:
         """
         Delete a user (soft by default, hard if specified).
+        Hard delete requires superuser privileges.
         """
-        # Check if user exists
         user = await self.repo.get_by_id(user_id)
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        if actor.id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot delete your own account",
+            )
+
+        if hard_delete and not actor.is_superuser:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only super admin can permanently delete users",
             )
 
         if hard_delete:
-            # Only super admins should be able to hard delete
             deleted = await self.repo.hard_delete(user_id)
         else:
             deleted = await self.repo.soft_delete(user_id)

@@ -8,6 +8,7 @@ from sqlalchemy.sql import func
 
 from app.models.user import User
 from app.models.role import Role
+from app.models.user_role import user_roles
 
 
 class UserRepository:
@@ -101,7 +102,7 @@ class UserRepository:
         """
         Search users by email or full_name with pagination.
         """
-        stmt = select(User)
+        stmt = select(User).options(selectinload(User.roles))
         
         # 1. Base filter: active/inactive
         if not include_inactive:
@@ -170,7 +171,7 @@ class UserRepository:
         self,
         skip: int = 0,
         limit: int = 100,
-        include_inactive: bool = False,
+        include_inactive: bool = True,
     ) -> List[User]:
         """
         Get a list of users with pagination.
@@ -202,7 +203,6 @@ class UserRepository:
         Returns:
             Total count
         """
-        from sqlalchemy import func
         
         stmt = select(func.count()).select_from(User)
         if not include_inactive:
@@ -282,7 +282,6 @@ class UserRepository:
         Args:
             user_id: UUID of the user
         """
-        from sqlalchemy.sql import func
         
         stmt = (
             update(User)
@@ -302,7 +301,6 @@ class UserRepository:
         Returns:
             Updated User object if found, else None
         """
-        from sqlalchemy.sql import func
         
         stmt = (
             update(User)
@@ -341,26 +339,14 @@ class UserRepository:
         Permanently delete a user from the database.
         Use with caution! Usually we use soft_delete instead.
         """
+        
+        await self.db.execute(
+            delete(user_roles).where(user_roles.c.user_id == user_id)
+        )
+        
         stmt = delete(User).where(User.id == user_id)
         result = await self.db.execute(stmt)
         await self.db.commit()
         return result.rowcount > 0
 
 
-
-
-
-
-
-        
-
-        
-
-
-        
-
-        
-
-        
-
-    

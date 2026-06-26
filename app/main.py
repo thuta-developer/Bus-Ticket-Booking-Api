@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, check_db_connection
-from app.models.base import Base  # Base model ကို import လုပ်ခြင်းဖြင့် metadata ကို Alembic အတွက် ပြင်ဆင်ပေးတယ်။
+from app.models.base import Base  
 from app.api.v1.router import router as v1_router
 from sqladmin import Admin
 

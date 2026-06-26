@@ -225,7 +225,7 @@ class UserService:
         Get the current authenticated user by ID.
         Raises 404 if not found or inactive.
         """
-        user = await self.repo.get_by_id(user_id)
+        user = await self.repo.get_by_id_with_roles_and_permissions(user_id)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -273,6 +273,19 @@ class UserService:
             )
 
         return UserResponse.model_validate(updated_user)
+
+    async def get_user_roles(self, user_id: UUID) -> List[Role]:
+        """
+        Get all roles assigned to a specific user.
+        Returns list of Role objects with their details.
+        """
+        user = await self.repo.get_by_id_with_roles_and_permissions(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        return user.roles
 
     async def assign_roles(self, user_id: UUID, role_ids: List[UUID]) -> User:
         """
@@ -423,17 +436,14 @@ class UserService:
                 detail="You cannot delete your own account",
             )
 
-        if hard_delete and not actor.is_superuser:
+        if  not actor.is_superuser:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only super admin can permanently delete users",
             )
-
-        if hard_delete:
-            deleted = await self.repo.hard_delete(user_id)
-        else:
-            deleted = await self.repo.soft_delete(user_id)
-
+            
+        deleted = await self.repo.hard_delete(user_id)
+        
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

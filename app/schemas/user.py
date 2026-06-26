@@ -86,7 +86,19 @@ class UserResponse(UserBase):
     verified_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    roles: Optional[List["RoleBriefResponse"]] = []
     
+    class Config:
+        from_attributes = True
+
+
+# Brief Role schema for embedding in UserResponse (avoids circular import)
+class RoleBriefResponse(BaseModel):
+    """Minimal role info for user response."""
+    id: UUID
+    name: str
+    description: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -127,3 +139,18 @@ class StaffUserCreate(UserBase):
 class UserRoleAssign(BaseModel):
     """Assign or replace roles for a user."""
     role_ids: List[UUID]
+
+
+class UserRolesListResponse(BaseModel):
+    """Response schema for listing a user's roles."""
+    user_id: UUID
+    user_email: str
+    user_name: str
+    roles: List[RoleBriefResponse]
+    total_roles: int
+
+
+class UserRolesListEnvelope(BaseModel):
+    """Standard wrapped response."""
+    status: str
+    data: UserRolesListResponse

@@ -11,7 +11,11 @@ from app.schemas.user import (
     UserResponse,
     UserAdminUpdate,
     UserRoleAssign,
+    UserRolesListResponse,
+    UserRolesListEnvelope,
+    RoleBriefResponse,
 )
+from app.schemas.role import RoleResponse
 from app.services.user_service import UserService
 from app.api.deps import (
     CurrentUser,  # Active User ကိုယ်တိုင်
@@ -52,7 +56,7 @@ async def list_users(
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=100, description="Maximum records to return"),
-    include_inactive: bool = Query(False, description="Include inactive users"),
+    include_inactive: bool = Query(True, description="Include inactive users"),
     is_verified: Optional[bool] = Query(
         None,
         description="Filter by email verification status"
@@ -175,7 +179,7 @@ async def delete_user(
     Delete a user. 'hard_delete=True' will permanently remove the record (use with caution).
     """
     service = UserService(db)
-    await service.delete_user(user_id, actor=current_user, hard_delete=hard_delete)
+    await service.delete_user(user_id, actor=current_user)
     return {
         "status": "success",
         "message": f"User {'hard ' if hard_delete else 'soft '}deleted successfully",
@@ -209,6 +213,41 @@ async def create_staff_user(
         "message": "Staff user created successfully",
         "data": user,
     }
+
+
+@router.get(
+    "/{user_id}/roles",
+    response_model=UserRolesListEnvelope,
+    status_code=status.HTTP_200_OK,
+    summary="Get user's assigned roles (Admin)",
+)
+async def get_user_roles(
+    user_id: UUID,
+    current_user: User = Depends(require_staff_permission("users:read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all roles assigned to a specific user.
+    Returns role details including id, name, and description.
+    """
+    service = UserService(db)
+    user = await service.repo.get_by_id_with_roles_and_permissions(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    roles = [RoleBriefResponse.model_validate(r) for r in user.roles]
+    
+    data = UserRolesListResponse(
+        user_id=user.id,
+        user_email=user.email,
+        user_name=user.full_name,
+        roles=roles,
+        total_roles=len(roles),
+    )
+    return {"status": "success", "data": data}
 
 
 @router.put(

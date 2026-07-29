@@ -46,3 +46,4 @@ class Role(BaseModel):
 
     def __repr__(self):
         return f"<Role {self.name}>"
+    

@@ -5,6 +5,11 @@ from app.models.role import Role
 from app.models.permission import Permission
 from app.models.role_permission import role_permissions
 from app.models.user_role import user_roles
+from app.models.bus_company import BusCompany
+from app.models.bus import Bus
+from app.models.route import Route
+from app.models.schedule import Schedule
+from app.models.seat import Seat
 
 import asyncio
 from logging.config import fileConfig

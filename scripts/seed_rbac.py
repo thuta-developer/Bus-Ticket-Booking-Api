@@ -15,7 +15,11 @@ CRUD_RESOURCES = [
     "users",
     "roles",
     "permissions",
-    # "buses",
+    "bus_companies",
+    "buses",
+    "routes",
+    "schedules",
+    "seats"
 ]
 
 # CUSTOM_RESOURCE_ACTIONS = {

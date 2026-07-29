@@ -67,7 +67,6 @@ class UserRepository:
         Returns:
             User object if found, else None
         """
-        # PostgreSQL LOWER() သုံးပြီး case-insensitive ဖြစ်အောင်ရှာ
         stmt = select(User).where(User.email.ilike(email))
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()

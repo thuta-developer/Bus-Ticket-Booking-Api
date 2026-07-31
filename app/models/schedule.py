@@ -17,15 +17,27 @@ class ScheduleStatus(str, enum.Enum):
 class Schedule(BaseModel):
     __tablename__ = "schedules"
 
-    departure_time = Column(Time, nullable=False)
-    arrival_time = Column(Time, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
+    departure_time = Column(Time(timezone=False), nullable=False, comment="Departure time")
+    arrival_time = Column(Time(timezone=False), nullable=False, comment="Arrival time")
     status = Column(Enum(ScheduleStatus), nullable=False, default=ScheduleStatus.ACTIVE)
-
     is_active = Column(Boolean, default=True, nullable=False)
-
     route_id = Column(UUID(as_uuid=True), ForeignKey("routes.id", ondelete="CASCADE"), nullable=False, index=True)
     bus_id = Column(UUID(as_uuid=True), ForeignKey("buses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    local_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Price for local citizens")
+    foreigner_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Price for foreigners citizens")
+
+    local_festival_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Festival price for locals")
+    foreigner_festival_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Festival price for foreigners")
+
+    # ==== Booking Window ====
+    booking_open_date = Column(DateTime(timezone=True), nullable=False, comment="When booking starts")
+    booking_close_date = Column(DateTime(timezone=True), nullable=False, comment="When booking ends")
+
+    # ==== Festival Date Range ====
+    festival_start_date = Column(DateTime(timezone=True), nullable=True, comment="Festival period start")
+    festival_end_date = Column(DateTime(timezone=True), nullable=True, comment="Festival period end")
+
 
     route = relationship("Route", back_populates="schedules", lazy="selectin")
     bus = relationship("Bus", back_populates="schedules", lazy="selectin")

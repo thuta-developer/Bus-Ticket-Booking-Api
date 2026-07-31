@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
-from datetime import datetime, time
-from pydantic import BaseModel, Field, field_validator
+from datetime import datetime, time,date
+from pydantic import BaseModel, Field, field_validator, model_validator
 from decimal import Decimal
 from enum import Enum
 
@@ -14,47 +14,82 @@ class ScheduleStatusEnum(str, Enum):
 class ScheduleBase(BaseModel):
     departure_time: time = Field(..., description="Departure time")
     arrival_time: time = Field(..., description="Arrival time")
-    price : Decimal = Field(..., gt=0, decimal_places=2, description="Ticket price")
     route_id : UUID = Field(..., description="Route ID")
     bus_id : UUID = Field(..., description="Bus ID")
     status: ScheduleStatusEnum = Field(ScheduleStatusEnum.ACTIVE, description="Status of the schedule (e.g., ACTIVE, CANCELLED, COMPLETED, DELAYED)")
     is_active: bool = Field(True, description="Indicates if the schedule is active")
 
-    @field_validator("arrival_time")
-    @classmethod
-    def validate_times(cls, v, info):
-        depature = info.data.get("departure_time")
-        if depature and v <= depature:
+    # Dynamic Pricing
+    local_price: Decimal = Field(..., ge=0, decimal_places=2, description="Price for locals")
+    foreigner_price: Decimal = Field(..., ge=0, decimal_places=2, description="Price for foreigners")
+    local_festival_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    foreigner_festival_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+
+    # Booking Window
+    booking_open_date: datetime = Field(..., description="When booking starts")
+    booking_close_date: datetime = Field(..., description="When booking ends")
+    
+    # Festival Date Range
+    festival_start_date: Optional[datetime] = Field(None, description="Festival period start")
+    festival_end_date: Optional[datetime] = Field(None, description="Festival period end")
+
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        # Arrival must be after departure
+        if self.arrival_time <= self.departure_time:
             raise ValueError("Arrival time must be after departure time")
-        return v
+        
+        # Booking open must be before booking close
+        if self.booking_open_date >= self.booking_close_date:
+            raise ValueError("Booking open date must be before booking close date")
+
+        # Festival date range validation
+        if self.festival_start_date and self.festival_end_date:
+            if self.festival_start_date >= self.festival_end_date:
+                raise ValueError("Festival start date must be before festival end date")
+
+        if self.local_festival_price is not None or self.foreigner_festival_price is not None:
+            if not self.festival_start_date or not self.festival_end_date:
+                raise ValueError("Festival date range must be set when festival prices are provided")
+
+        return self
+
+
+        
+
+
 
 
 class ScheduleCreate(ScheduleBase):
     pass
 
 
+
 class ScheduleUpdate(BaseModel):
     departure_time: Optional[time] = None
     arrival_time: Optional[time] = None
-    price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     route_id: Optional[UUID] = None
     bus_id: Optional[UUID] = None
     status: Optional[ScheduleStatusEnum] = None
     is_active: Optional[bool] = None
+    local_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    foreigner_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    local_festival_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    foreigner_festival_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    booking_open_date: Optional[datetime] = None
+    booking_close_date: Optional[datetime] = None
+    festival_start_date: Optional[datetime] = None
+    festival_end_date: Optional[datetime] = None
 
-    @field_validator("arrival_time")
-    @classmethod
-    def validate_times(cls, v, info):
-        depature = info.data.get("departure_time")
-        if depature and v <= depature:
-            raise ValueError("Arrival time must be after departure time")
-        return v
+
 
 
 class ScheduleResponse(ScheduleBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+
     route_origin: Optional[str] = None
     route_destination: Optional[str] = None
     bus_number: Optional[str] = None
@@ -64,10 +99,27 @@ class ScheduleResponse(ScheduleBase):
         from_attributes = True
 
 
+# ====== Price Calculator Helper ======
+class SchedulePriceResponse(BaseModel):
+    schedule_id: UUID
+    base_price: Decimal
+    final_price: Decimal
+    price_type: str  # local / foreigner / festival local / festival foreigner
+    is_festival: bool
+    user_type: str  # local / foreigner
+    currency: str = "MMK"
 
 
 
-
-
-
+# ===== Search Filter Schema ======
+class ScheduleSearchFilter(BaseModel):
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    travel_date: Optional[date] = Field(None, description="Date of travel (YYYY-MM-DD)")
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    bus_type: Optional[str] = None
+    user_type: str = "local"  # "local" or "foreigner"
+    include_festival: bool = False
+    include_bookable_only: bool = True
 

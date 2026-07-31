@@ -1,6 +1,6 @@
 from typing import Optional
 from uuid import UUID
-from datetime import date
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from app.models.user import User
 from app.api.deps import require_permission
 from app.schemas.schedule import ScheduleCreate, ScheduleUpdate, ScheduleResponse
 from app.services.schedule_service import ScheduleService
+
 
 router = APIRouter(
     prefix="/schedules",
@@ -20,27 +21,104 @@ router = APIRouter(
     },
 )
 
+
 # ============================================
-# 1. List All Schedules (Public)
+#  SEARCH SCHEDULES
+# ============================================
+@router.get(
+    "/search",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Search schedules with dynamic pricing",
+    description="Search for schedules by origin, destination, travel date, and user type",
+)
+async def search_schedules(
+    origin: Optional[str] = Query(None, description="Origin city"),
+    destination: Optional[str] = Query(None, description="Destination city"),
+    travel_date: Optional[datetime] = Query(None, description="Travel date"),
+    user_type: str = Query(
+        "local", 
+        regex="^(local|foreigner)$",
+        description="User type: 'local' or 'foreigner'"
+    ),
+    min_price: Optional[float] = Query(
+        None, 
+        ge=0, 
+        description="Minimum price (MMK)"
+    ),
+    max_price: Optional[float] = Query(
+        None, 
+        ge=0, 
+        description="Maximum price (MMK)"
+    ),
+     bus_type: Optional[str] = Query(
+        None, 
+        description="Bus type: AC, NonAC, VIP, Express, Normal"
+    ),
+    include_bookable_only: bool = Query(
+        True, 
+        description="Only show schedules within booking window"
+    ),
+        skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum records to return"),
+    
+    db: AsyncSession = Depends(get_db),
+):
+    service = ScheduleService(db)
+    result = await service.search_schedules(
+        origin=origin,
+        destination=destination,
+        travel_date=travel_date,
+        user_type=user_type,
+        min_price=min_price,
+        max_price=max_price,
+        bus_type=bus_type,
+        include_bookable_only=include_bookable_only,
+        skip=skip,
+        limit=limit,
+    )
+    return {"status": "success", "data": result}
+    
+
+
+
+
+
+
+
+
+# ============================================
+# 1. List Schedules with Search & Price
 # ============================================
 @router.get(
     "/",
     response_model=dict,
     status_code=status.HTTP_200_OK,
-    summary="List all schedules",
+    summary="List all schedules with price calculation",
 )
 async def list_schedules(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Maximum records to return"),
-    search: Optional[str] = Query(None, description="Search by route, bus, or company"),
+    search: Optional[str] = Query(None, description="Search by origin, destination, bus number, or company"),
     route_id: Optional[UUID] = Query(None, description="Filter by route ID"),
     bus_id: Optional[UUID] = Query(None, description="Filter by bus ID"),
-    status: Optional[str] = Query(None, description="Filter by status (active, cancelled, completed, delayed)"),
-    from_date: Optional[date] = Query(None, description="Filter from date"),
-    to_date: Optional[date] = Query(None, description="Filter to date"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    departure_date: Optional[datetime] = Query(None, description="Filter by departure date"),
     include_inactive: bool = Query(False, description="Include inactive schedules"),
+    include_bookable_only: bool = Query(True, description="Only show bookable schedules"),
+    user_type: str = Query("local", description="User type: 'local' or 'foreigner'"),
+    travel_date: Optional[datetime] = Query(None, description="Travel date for festival price calculation (defaults to now)"),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Get schedules with dynamic pricing.
+    
+    - **user_type**: 'local' or 'foreigner' - determines which price to show
+    - **departure_date**: Show schedules for a specific date
+    - **travel_date**: The date you plan to travel. If it falls within the festival period,
+      festival pricing will be applied. Defaults to current date/time.
+    - **include_bookable_only**: Only show schedules within booking window
+    """
     service = ScheduleService(db)
     result = await service.list_schedules(
         skip=skip,
@@ -49,15 +127,43 @@ async def list_schedules(
         route_id=route_id,
         bus_id=bus_id,
         status=status,
-        from_date=from_date,
-        to_date=to_date,
+        departure_date=departure_date,
         include_inactive=include_inactive,
+        include_bookable_only=include_bookable_only,
+        user_type=user_type,
+        travel_date=travel_date,
     )
     return {"status": "success", "data": result}
 
 
 # ============================================
-# 2. Get Schedule by ID (Public)
+# 2. Get Schedule with Price
+# ============================================
+@router.get(
+    "/{schedule_id}/price",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get schedule with price calculation",
+)
+async def get_schedule_with_price(
+    schedule_id: UUID,
+    user_type: str = Query("local", description="User type: 'local' or 'foreigner'"),
+    travel_date: Optional[datetime] = Query(None, description="Travel date for festival price calculation (defaults to now)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get a specific schedule with calculated price for the user.
+    
+    - **travel_date**: The date you plan to travel. If it falls within the festival period,
+      festival pricing will be applied. Defaults to current date/time.
+    """
+    service = ScheduleService(db)
+    result = await service.get_schedule_with_price(schedule_id, user_type, travel_date=travel_date)
+    return {"status": "success", "data": result}
+
+
+# ============================================
+# 3. Get Schedule by ID (Legacy)
 # ============================================
 @router.get(
     "/{schedule_id}",
@@ -74,10 +180,8 @@ async def get_schedule(
     return {"status": "success", "data": ScheduleResponse.model_validate(schedule)}
 
 
-
 # ============================================
-# 3. Create Schedule (Admin Only)
-# Permission Required: schedules:write
+# 4. Create Schedule (Admin Only)
 # ============================================
 @router.post(
     "/",
@@ -100,8 +204,7 @@ async def create_schedule(
 
 
 # ============================================
-# 4. Update Schedule (Admin Only)
-# Permission Required: schedules:write
+# 5. Update Schedule (Admin Only)
 # ============================================
 @router.put(
     "/{schedule_id}",
@@ -125,7 +228,7 @@ async def update_schedule(
 
 
 # ============================================
-# 5. Update Schedule Status (Admin Only)
+# 6. Update Schedule Status (Admin Only)
 # ============================================
 @router.put(
     "/{schedule_id}/status",
@@ -149,14 +252,13 @@ async def update_schedule_status(
 
 
 # ============================================
-# 6. Delete Schedule (Admin Only)
-# Permission Required: schedules:write
+# 7. Delete Schedule (Admin Only)
 # ============================================
 @router.delete(
     "/{schedule_id}",
     response_model=None,
-    status_code=status.HTTP_200_OK,
-    summary="Delete a schedule by ID",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a schedule",
 )
 async def delete_schedule(
     schedule_id: UUID,

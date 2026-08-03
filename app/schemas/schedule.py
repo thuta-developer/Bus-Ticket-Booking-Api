@@ -36,9 +36,9 @@ class ScheduleBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_dates(self):
-        # Arrival must be after departure
-        if self.arrival_time <= self.departure_time:
-            raise ValueError("Arrival time must be after departure time")
+        # # Arrival must be after departure
+        # if self.arrival_time <= self.departure_time:
+        #     raise ValueError("Arrival time must be after departure time")
         
         # Booking open must be before booking close
         if self.booking_open_date >= self.booking_close_date:

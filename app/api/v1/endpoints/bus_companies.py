@@ -1,8 +1,8 @@
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.api.deps import require_permission
@@ -12,6 +12,7 @@ from app.schemas.bus_company import (
     BusCompanyResponse,
 )
 from app.services.bus_company_service import BusCompanyService
+from app.services.logo_upload_service import LogoUploadService
 
 router = APIRouter(
     prefix="/bus-companies",
@@ -135,4 +136,89 @@ async def delete_company(
     return {
         "status": "success",
         "message": f"Bus Company {'hard ' if hard_delete else 'soft '}deleted successfully",
+    }
+
+
+# ============================================
+# Upload Logo
+# ============================================
+@router.post(
+    "/{company_id}/logo",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Upload company logo",
+    description="Upload a logo image for the company. Supported: JPEG, PNG, WEBP, SVG. Max size: 5MB.",
+)
+async def upload_logo(
+    company_id: UUID,
+    file: UploadFile = File(..., description="Logo image file to upload"),
+    current_user: User = Depends(require_permission("bus_companies:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+
+    if file_size > settings.MAX_LOGO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds {settings.MAX_LOGO_SIZE // (1024*1024)}MB limit"
+        )
+
+    service = LogoUploadService(db)
+    result = await service.upload_logo(str(company_id), file)
+    return {
+        "status": "success",
+        "message": result["message"],
+        "data": {
+            "company_id": result["company_id"],
+            "logo_url": result["logo_url"],
+        },
+    }
+
+# ============================================
+#  Delete Logo 
+# ============================================
+@router.delete(
+    "/{company_id}/logo",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Delete company logo",
+    description="Delete the company's logo from Cloudinary and database.",
+)
+async def delete_logo(
+    company_id: UUID,
+    current_user: User = Depends(require_permission("bus_companies:delete")),
+    db: AsyncSession = Depends(get_db),
+):
+    service = LogoUploadService(db)
+    result = await service.delete_logo(str(company_id))
+    
+    return {
+        "status": "success",
+        "message": result["message"],
+    }
+
+# ============================================
+# Get Logo URL 
+# ============================================
+@router.get(
+    "/{company_id}/logo",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get company logo URL",
+    description="Get the logo URL for a company.",
+)
+async def get_logo(
+    company_id: UUID,
+    db : AsyncSession = Depends(get_db)
+):
+    service = BusCompanyService(db)
+    company = await service.get_company(company_id)
+    return {
+        "status": "success",
+        "data": {
+            "company_id": company.id,
+            "logo_url": company.logo_url,
+        },
     }

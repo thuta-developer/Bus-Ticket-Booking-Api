@@ -1,20 +1,31 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import engine, check_db_connection
 from app.models.base import Base  
 from app.api.v1.router import router as v1_router
 from sqladmin import Admin
+from pathlib import Path
 
 from app.core.database import engine
 from app.admin import register_admin
+
+UPLOAD_DIR = Path("uploads/companies")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 app = FastAPI(
     title="Bus Ticket System",
     version="1.0.0",
     description="Production Ready Bus Booking API"
 )
+
+# ============================================
+#  Serve Static Files (for local fallback)
+# ============================================
+app.mount("/static/companies", StaticFiles(directory="uploads/companies"), name="static_companies")
 
 admin = Admin(app, engine=engine, title="Bus Ticket Admin Panel")
 register_admin(admin)

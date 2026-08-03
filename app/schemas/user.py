@@ -1,7 +1,7 @@
 from typing import Optional, List, Literal
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 # ============================================
 # 1. Base Schema (Common fields)
@@ -22,7 +22,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Properties required for user registration."""
     password : str = Field(..., min_length=8, description="Password must be at least 8 characters")
-    
+    confirm_password : str = Field(..., min_length=8, description="Confirm password must match password")
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
@@ -33,6 +34,13 @@ class UserCreate(UserBase):
         if not any(char.isupper() for char in v):
             raise ValueError("Password must contain at least one uppercase letter")
         return v
+
+    @model_validator(mode="after")
+    def check_passwords_match(self):
+        """password နဲ့ confirm_password တူညီမှုကို စစ်ဆေးခြင်း"""
+        if self.password != self.confirm_password:
+            raise ValueError("Password and confirm password do not match")
+        return self
 
 
 # ============================================

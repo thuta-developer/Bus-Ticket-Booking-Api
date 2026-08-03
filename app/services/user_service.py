@@ -64,7 +64,7 @@ class UserService:
         hashed_password = get_password_hash(user_data.password)
 
         # 3. Prepare user data for creation
-        user_dict = user_data.model_dump(exclude={"password"})
+        user_dict = user_data.model_dump(exclude={"password", "confirm_password"})
         user_dict["hashed_password"] = hashed_password
         user_dict["account_type"] = "customer"
 

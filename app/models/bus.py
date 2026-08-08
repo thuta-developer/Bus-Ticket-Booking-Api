@@ -35,6 +35,7 @@ class Bus(BaseModel):
         lazy="selectin"
     )
     features = relationship("Feature", secondary="bus_features", back_populates="buses", lazy="selectin")
+    images = relationship("BusImage", back_populates="bus", cascade="all, delete-orphan", lazy="selectin")
 
 
     def __repr__(self):

@@ -6,6 +6,7 @@ from enum import Enum
 
 from app.schemas.seat_layout import SeatLayoutResponse
 from app.schemas.feature import FeatureResponse
+from app.schemas.bus_image import BusImageResponse
 
 class BusTypeEnum(str, Enum):
     VIP = "VIP"
@@ -42,6 +43,8 @@ class BusResponse(BusBase):
     company_name: Optional[str] = None
     seat_layout : Optional[SeatLayoutResponse] = None
     features : List[FeatureResponse] = []
+    images: List[BusImageResponse] = Field(default_factory=list)
+
 
     class Config:
         from_attributes = True

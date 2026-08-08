@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import enum
+from app.schemas.feature import FeatureResponse
 
 from app.models.base import BaseModel
 
@@ -33,6 +34,7 @@ class Bus(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
+    features = relationship("Feature", secondary="bus_features", back_populates="buses", lazy="selectin")
 
 
     def __repr__(self):

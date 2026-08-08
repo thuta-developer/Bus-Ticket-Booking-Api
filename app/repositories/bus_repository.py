@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.models.bus import Bus
+from app.models.feature import Feature
 from app.models.bus_company import BusCompany
 
 
@@ -81,9 +82,15 @@ class BusRepository:
         return result.scalar_one()
     
     # Create
-    async def create(self, bus_data: dict) -> Bus:
+    async def create(self, bus_data: dict, feature_ids: List[UUID]) -> Bus:
         try:
             bus = Bus(**bus_data)
+
+            if feature_ids:
+                stmt = select(Feature).where(Feature.id.in_(feature_ids))
+                features = (await self.db.execute(stmt)).scalars().all()
+                bus.features = features
+
             self.db.add(bus)
             await self.db.commit()
             await self.db.refresh(bus)
@@ -98,21 +105,24 @@ class BusRepository:
         
 
     # Update
-    async def update(self, bus_id: UUID, update_data: dict) -> Optional[Bus]:
+    async def update(self, bus_id: UUID, update_data: dict, feature_ids: Optional[List[UUID]] = None) -> Optional[Bus]:
         bus = await self.get_by_id(bus_id)
         if not bus:
             return None
+
         
         try:
-            stmt = (
-                update(Bus)
-                .where(Bus.id == bus_id)
-                .values(**update_data)
-                .returning(Bus)
-            )
-            result = await self.db.execute(stmt)
+            for key, value in update_data.items():
+                setattr(bus, key, value)
+
+            if feature_ids is not None:
+                stmt = select(Feature).where(Feature.id.in_(feature_ids))
+                features = (await self.db.execute(stmt)).scalars().all()
+                bus.features = features
+
             await self.db.commit()
-            return result.scalar_one_or_none()
+            await self.db.refresh(bus)
+            return bus
         except IntegrityError as e:
             await self.db.rollback()
             if "bus_number" in str(e).lower():

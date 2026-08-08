@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Optional,List
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field
 from enum import Enum
 
 from app.schemas.seat_layout import SeatLayoutResponse
+from app.schemas.feature import FeatureResponse
 
 class BusTypeEnum(str, Enum):
     VIP = "VIP"
@@ -21,7 +22,7 @@ class BusBase(BaseModel):
 
 
 class BusCreate(BusBase):
-    pass
+    feature_ids : Optional[List[UUID]] = Field(default=[], description="list of feature ids")
 
 class BusUpdate(BaseModel):
     bus_number: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -30,6 +31,8 @@ class BusUpdate(BaseModel):
     license_plate: Optional[str] = Field(None, min_length=1, max_length=20)
     company_id: Optional[UUID] = None
     is_active: Optional[bool] = None
+    feature_ids : Optional[List[UUID]] = Field(default=[], description="list of feature ids to update")
+
 
 
 class BusResponse(BusBase):
@@ -38,6 +41,7 @@ class BusResponse(BusBase):
     updated_at: datetime
     company_name: Optional[str] = None
     seat_layout : Optional[SeatLayoutResponse] = None
+    features : List[FeatureResponse] = []
 
     class Config:
         from_attributes = True

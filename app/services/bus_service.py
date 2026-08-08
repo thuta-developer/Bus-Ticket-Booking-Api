@@ -41,9 +41,11 @@ class BusService:
                 detail=f"Company with ID '{bus_data.company_id}' does not exist"
             )
 
+        bus_dict = bus_data.model_dump(exclude={"features_ids"})
+        feature_ids = bus_data.feature_ids
         
         try:
-            bus = await self.repo.create(bus_data.model_dump())
+            bus = await self.repo.create(bus_dict, feature_ids)
             return BusResponse.model_validate(bus)
         except ValueError as e:
             raise HTTPException(
@@ -140,8 +142,12 @@ class BusService:
                 detail="No valid fields to update"
             )
 
+
+        update_dict = update_data.model_dump(exclude_unset=True, exclude={"feature_ids"})
+        feature_ids = update_data.feature_ids if "feature_ids" in update_data.model_dump(exclude_unset=True) else None
+
         try:
-            bus = await self.repo.update(bus_id, update_dict)
+            bus = await self.repo.update(bus_id, update_dict, feature_ids)
             if not bus:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

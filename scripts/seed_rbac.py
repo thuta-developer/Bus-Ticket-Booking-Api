@@ -19,7 +19,8 @@ CRUD_RESOURCES = [
     "buses",
     "routes",
     "schedules",
-    "seats"
+    "seats",
+    "features"
 ]
 
 # CUSTOM_RESOURCE_ACTIONS = {

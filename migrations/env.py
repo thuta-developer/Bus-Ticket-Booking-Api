@@ -10,6 +10,10 @@ from app.models.bus import Bus
 from app.models.route import Route
 from app.models.schedule import Schedule
 from app.models.seat import Seat
+from app.models.feature import Feature
+
+
+
 
 import asyncio
 from logging.config import fileConfig

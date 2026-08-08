@@ -7,3 +7,4 @@ from app.models.schedule import Schedule
 from app.models.route import Route
 from app.models.seat import Seat
 from app.models.seat_layout import SeatLayout
+from app.models.feature import Feature

@@ -35,6 +35,19 @@ class BusUpdate(BaseModel):
     feature_ids : Optional[List[UUID]] = Field(default=[], description="list of feature ids to update")
 
 
+class BusListResponse(BusBase):
+    """Lightweight bus response for list endpoints.
+    Excludes heavy relations (seat_layout, features, images) for better performance.
+    """
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    company_name: Optional[str] = None
+
+
+    class Config:
+        from_attributes = True
+
 
 class BusResponse(BusBase):
     id: UUID

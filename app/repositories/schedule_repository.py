@@ -5,6 +5,8 @@ from sqlalchemy import select, update, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from sqlalchemy.orm import selectinload
+
 from app.models.schedule import Schedule
 from app.models.route import Route
 from app.models.bus import Bus
@@ -39,6 +41,10 @@ class ScheduleRepository:
             .join(Route, Schedule.route_id == Route.id)
             .join(Bus, Schedule.bus_id == Bus.id)
             .join(BusCompany, Bus.company_id == BusCompany.id)
+            .options(
+                selectinload(Schedule.route),
+                selectinload(Schedule.bus).selectinload(Bus.company),
+            )
         )
 
         # Filters
@@ -115,7 +121,14 @@ class ScheduleRepository:
         
 
     async def get_by_id(self, schedule_id: UUID) -> Optional[Schedule]:
-        stmt = select(Schedule).where(Schedule.id == schedule_id)
+        stmt = (
+            select(Schedule)
+            .where(Schedule.id == schedule_id)
+            .options(
+                selectinload(Schedule.route),
+                selectinload(Schedule.bus).selectinload(Bus.company),
+            )
+        )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -139,6 +152,10 @@ class ScheduleRepository:
             .join(Route, Schedule.route_id == Route.id)
             .join(Bus, Schedule.bus_id == Bus.id)
             .join(BusCompany, Bus.company_id == BusCompany.id)
+            .options(
+                selectinload(Schedule.route),
+                selectinload(Schedule.bus).selectinload(Bus.company),
+            )
         )
 
         #  Bookable only filter (within booking window)
@@ -404,11 +421,12 @@ class ScheduleRepository:
                 update(Schedule)
                 .where(Schedule.id == schedule_id)
                 .values(**update_data)
-                .returning(Schedule)
+                .returning(Schedule.id)
             )
-            result = await self.db.execute(stmt)
+            await self.db.execute(stmt)
             await self.db.commit()
-            return result.scalar_one_or_none()
+            # Reload with relationships for response serialization
+            return await self.get_by_id(schedule_id)
         except IntegrityError:
             await self.db.rollback()
             raise ValueError("Failed to update schedule.")
@@ -435,5 +453,5 @@ class ScheduleRepository:
             return None
         schedule.status = status
         await self.db.commit()
-        await self.db.refresh(schedule)
-        return schedule
+        # Reload with relationships for response serialization
+        return await self.get_by_id(schedule_id)

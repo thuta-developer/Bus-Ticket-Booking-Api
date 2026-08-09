@@ -370,4 +370,5 @@ class ScheduleService:
             response.bus_number = schedule.bus.bus_number
             if schedule.bus.company:
                 response.company_name = schedule.bus.company.name
+                response.company_logo_url = schedule.bus.company.logo_url
         return response

@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select, update, or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import lazyload, selectinload
 
 from app.models.bus import Bus
 from app.models.feature import Feature
@@ -15,7 +16,16 @@ class BusRepository:
 
     # Read Operations
     async def get_by_id(self, bus_id: UUID) -> Optional[Bus]:
-        stmt = select(Bus).where(Bus.id == bus_id)
+        stmt = (
+            select(Bus)
+            .where(Bus.id == bus_id)
+            .options(
+                selectinload(Bus.company),
+                selectinload(Bus.seat_layout),
+                selectinload(Bus.features),
+                selectinload(Bus.images),
+            )
+        )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
     
@@ -30,7 +40,17 @@ class BusRepository:
         return result.scalar_one_or_none()
     
     async def get_all(self, skip: int = 0, limit: int = 10, search: Optional[str] = None, company_id: Optional[UUID] = None, bus_type: Optional[str] = None, include_inactive: bool = False) -> List[Bus]:
-        stmt = select(Bus).join(BusCompany)
+        stmt = (
+            select(Bus)
+            .join(BusCompany)
+            .options(
+                selectinload(Bus.company),
+                # Avoid loading heavy relations in list view for performance
+                lazyload(Bus.seat_layout),
+                lazyload(Bus.features),
+                lazyload(Bus.images),
+            )
+        )
 
         # Filters
         if not include_inactive:

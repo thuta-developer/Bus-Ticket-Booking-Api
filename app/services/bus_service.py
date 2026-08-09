@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.bus_repository import BusRepository
 from app.repositories.bus_company_repository import BusCompanyRepository
-from app.schemas.bus import BusCreate, BusUpdate, BusResponse
+from app.schemas.bus import BusCreate, BusUpdate, BusResponse, BusListResponse
 
 
 class BusService:
@@ -83,7 +83,7 @@ class BusService:
 
         item = []
         for bus in buses:
-            response = BusResponse.model_validate(bus)
+            response = BusListResponse.model_validate(bus)
             if bus.company:
                 response.company_name = bus.company.name
             item.append(response)

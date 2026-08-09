@@ -94,6 +94,7 @@ class ScheduleResponse(ScheduleBase):
     route_destination: Optional[str] = None
     bus_number: Optional[str] = None
     company_name: Optional[str] = None
+    company_logo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

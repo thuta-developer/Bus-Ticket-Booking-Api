@@ -12,6 +12,9 @@ from app.models.schedule import Schedule
 from app.models.seat import Seat
 from app.models.feature import Feature
 from app.models.bus_image import BusImage
+from app.models.promotion import Promotion
+from app.models.promotion_usage import PromotionUsage
+from app.models.booking import Booking
 
 
 

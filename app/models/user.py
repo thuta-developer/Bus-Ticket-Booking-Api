@@ -58,6 +58,13 @@ class User(BaseModel):
         back_populates="users",
         lazy="selectin",
     )
+    promotions_used = relationship(
+        "PromotionUsage",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
     
     # ========== Indexes for Performance ==========
     __table_args__ = (

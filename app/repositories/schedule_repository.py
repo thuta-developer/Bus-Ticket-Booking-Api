@@ -1,6 +1,6 @@
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime,date,time
+from datetime import datetime, date, time
 from sqlalchemy import select, update, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +17,15 @@ class ScheduleRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    def _get_time_range(self, time_of_day: str) -> tuple:
+        """Get start and end time for a given time of day."""
+        ranges = {
+            "morning": (time(6, 0, 0), time(11, 59, 59)),
+            "afternoon": (time(12, 0, 0), time(17, 59, 59)),
+            "night": (time(18, 0, 0), time(23, 59, 59)),
+        }
+        return ranges.get(time_of_day.lower())
+
     # Search
     async def search_schedules(
         self,
@@ -32,6 +41,7 @@ class ScheduleRepository:
         status: Optional[str] = None,
         include_bookable_only: bool = True,
         include_inactive: bool = False,
+        time_of_day: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
     ) -> List[Schedule]:
@@ -71,6 +81,15 @@ class ScheduleRepository:
                         Schedule.is_active == True,
                     )
                 )
+
+        if time_of_day:
+            start_time, end_time = self._get_time_range(time_of_day)
+            stmt = stmt.where(
+                and_(
+                    Schedule.departure_time >= start_time,
+                    Schedule.departure_time <= end_time,
+                )
+            )
 
         # Active Status Filter
         if not include_inactive:
@@ -118,8 +137,6 @@ class ScheduleRepository:
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
-        
-
     async def get_by_id(self, schedule_id: UUID) -> Optional[Schedule]:
         stmt = (
             select(Schedule)
@@ -145,7 +162,7 @@ class ScheduleRepository:
         include_bookable_only: bool = True,
         user_type: str = "local",
     ) -> List[Schedule]:
-        
+
         stmt = (
             select(Schedule)
             .select_from(Schedule)
@@ -184,12 +201,16 @@ class ScheduleRepository:
 
         #  Filter by departure date
         if departure_date:
-            start_of_day = departure_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_of_day = departure_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_of_day = departure_date.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            end_of_day = departure_date.replace(
+                hour=23, minute=59, second=59, microsecond=999999
+            )
             stmt = stmt.where(
                 and_(
                     Schedule.departure_time >= start_of_day.time(),
-                    Schedule.departure_time <= end_of_day.time()
+                    Schedule.departure_time <= end_of_day.time(),
                 )
             )
 
@@ -219,7 +240,6 @@ class ScheduleRepository:
         stmt = stmt.offset(skip).limit(limit).order_by(Schedule.departure_time.asc())
         result = await self.db.execute(stmt)
         return result.scalars().all()
-
 
     async def count(
         self,
@@ -272,12 +292,16 @@ class ScheduleRepository:
 
         #  Filter by departure date
         if departure_date:
-            start_of_day = departure_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_of_day = departure_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_of_day = departure_date.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            end_of_day = departure_date.replace(
+                hour=23, minute=59, second=59, microsecond=999999
+            )
             stmt = stmt.where(
                 and_(
                     Schedule.departure_time >= start_of_day.time(),
-                    Schedule.departure_time <= end_of_day.time()
+                    Schedule.departure_time <= end_of_day.time(),
                 )
             )
 
@@ -320,6 +344,7 @@ class ScheduleRepository:
         status: Optional[str] = None,
         include_bookable_only: bool = True,
         include_inactive: bool = False,
+        time_of_day: Optional[str] = None,
     ) -> int:
         """
         Count total results for search (for pagination).
@@ -356,6 +381,15 @@ class ScheduleRepository:
                         Schedule.is_active == True,
                     )
                 )
+
+        if time_of_day:
+            start_time, end_time = self._get_time_range(time_of_day)
+            stmt = stmt.where(
+                and_(
+                    Schedule.departure_time >= start_time,
+                    Schedule.departure_time <= end_time,
+                )
+            )
 
         if not include_inactive:
             stmt = stmt.where(Schedule.is_active == True)
@@ -397,9 +431,6 @@ class ScheduleRepository:
         result = await self.db.execute(stmt)
         return result.scalar()
 
-
-
-
     async def create(self, schedule_data: dict) -> Schedule:
         try:
             schedule = Schedule(**schedule_data)
@@ -409,7 +440,9 @@ class ScheduleRepository:
             return schedule
         except IntegrityError as e:
             await self.db.rollback()
-            raise ValueError("Failed to create schedule. Please check route and bus IDs.")
+            raise ValueError(
+                "Failed to create schedule. Please check route and bus IDs."
+            )
 
     async def update(self, schedule_id: UUID, update_data: dict) -> Optional[Schedule]:
         schedule = await self.get_by_id(schedule_id)

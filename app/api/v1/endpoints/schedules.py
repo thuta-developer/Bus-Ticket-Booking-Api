@@ -1,6 +1,6 @@
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime,date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,9 @@ from app.core.database import get_db
 from app.models.user import User
 from app.api.deps import require_permission
 from app.schemas.schedule import ScheduleCreate, ScheduleUpdate, ScheduleResponse
+from app.services.schedule_service import ScheduleService
+
+from app.api.deps import get_current_active_user
 from app.services.schedule_service import ScheduleService
 
 
@@ -59,8 +62,12 @@ async def search_schedules(
         True, 
         description="Only show schedules within booking window"
     ),
-        skip: int = Query(0, ge=0, description="Number of records to skip"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Maximum records to return"),
+    time_of_day: Optional[str] = Query(
+        None,
+        description="Filter by time of day: morning, afternoon, night"
+    ),
     
     db: AsyncSession = Depends(get_db),
 ):
@@ -76,6 +83,7 @@ async def search_schedules(
         include_bookable_only=include_bookable_only,
         skip=skip,
         limit=limit,
+        time_of_day=time_of_day
     )
     return {"status": "success", "data": result}
     
@@ -164,22 +172,51 @@ async def get_schedule_with_price(
 
 # ============================================
 # 3. Get Schedule by ID (Legacy)
-# ============================================
+# # ============================================
+# @router.get(
+#     "/{schedule_id}",
+#     response_model=dict,
+#     status_code=status.HTTP_200_OK,
+#     summary="Get a schedule by ID",
+# )
+# async def get_schedule(
+#     schedule_id: UUID,
+#     db: AsyncSession = Depends(get_db),
+# ):
+#     service = ScheduleService(db)
+#     schedule = await service.get_schedule(schedule_id)
+#     return {"status": "success", "data": ScheduleResponse.model_validate(schedule)}
+
 @router.get(
-    "/{schedule_id}",
+    "/{schedule_id}/detail",
     response_model=dict,
     status_code=status.HTTP_200_OK,
-    summary="Get a schedule by ID",
+    summary="Get schedule detail with seats",
+    description="Get complete schedule detail including bus info, seats, and price.",
 )
-async def get_schedule(
+async def get_schedule_detail(
     schedule_id: UUID,
+    user_type: str = Query("local", regex="^(local|foreigner)$"),
+    travel_date: Optional[date] = Query(None, description="Date of travel"),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_active_user),
 ):
+    """
+    Get full schedule detail for seat selection.
+    
+    Returns:
+    - Schedule info (route, time)
+    - Bus info (company, type, features, images)
+    - Seat layout (all seats with availability)
+    - Price calculation (based on user type and date)
+    """
     service = ScheduleService(db)
-    schedule = await service.get_schedule(schedule_id)
-    return {"status": "success", "data": ScheduleResponse.model_validate(schedule)}
-
-
+    result = await service.get_schedule_detail(
+        schedule_id=schedule_id,
+        user_type=user_type,
+        travel_date=travel_date,
+    )
+    return {"status": "success", "data": result}
 # ============================================
 # 4. Create Schedule (Admin Only)
 # ============================================

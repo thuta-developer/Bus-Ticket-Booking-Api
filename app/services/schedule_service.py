@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from uuid import UUID
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date,time
 from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.schedule_repository import ScheduleRepository
 from app.repositories.route_repository import RouteRepository
 from app.repositories.bus_repository import BusRepository
+from app.repositories.seat_repository import SeatRepository
+from app.repositories.seat_layout_repository import SeatLayoutRepository
 from app.models.schedule import Schedule
 from app.schemas.schedule import (
     ScheduleCreate,
@@ -15,8 +17,13 @@ from app.schemas.schedule import (
     ScheduleResponse,
     SchedulePriceResponse,
     ScheduleSearchFilter,
+    ScheduleDetailResponse
 )
-
+from app.schemas.seat import SeatResponse
+from app.schemas.seat_layout import SeatLayoutResponse
+from app.schemas.bus import BusResponse
+from app.schemas.feature import FeatureResponse
+from app.schemas.bus_image import BusImageResponse
 
 class ScheduleService:
     def __init__(self, db: AsyncSession):
@@ -24,6 +31,8 @@ class ScheduleService:
         self.repository = ScheduleRepository(db)
         self.route_repository = RouteRepository(db)
         self.bus_repository = BusRepository(db)
+        self.seat_repo = SeatRepository(db)
+        self.layout_repo = SeatLayoutRepository(db)
 
     # ========================================
     # Price Calculation
@@ -110,6 +119,7 @@ class ScheduleService:
         include_bookable_only: bool = True,
         skip: int = 0,
         limit: int = 20,
+        time_of_day : Optional[str] = None
     ):
         schedules = await self.repository.search_schedules(
             origin=origin,
@@ -122,6 +132,7 @@ class ScheduleService:
             include_bookable_only=include_bookable_only,
             skip=skip,
             limit=limit,
+            time_of_day=time_of_day
         )
 
         total = await self.repository.count_search(
@@ -132,6 +143,7 @@ class ScheduleService:
             max_price=max_price,
             bus_type=bus_type,
             include_bookable_only=include_bookable_only,
+            time_of_day=time_of_day
         )
 
         items = []
@@ -286,6 +298,64 @@ class ScheduleService:
             "user_type": user_type,
         }
 
+
+    async def get_schedule_detail(
+        self,
+        schedule_id: UUID,
+        user_type: str = "local",
+        travel_date: Optional[date] = None,
+    ) -> ScheduleDetailResponse:
+        """
+        Get complete schedule detail including bus, seats, and layout.
+        """
+        # 1. Get schedule
+        schedule = await self.repository.get_by_id(schedule_id)
+        if not schedule:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Schedule not found"
+            )
+
+        # 2. Calculate price
+        check_date = datetime.combine(travel_date, datetime.min.time()) if travel_date else None
+        price_info = self.calculate_price(schedule, user_type, check_date)
+
+        # 3. Get bus details
+        bus_response = None
+        if schedule.bus:
+            bus_response = await self._get_bus_detail(schedule.bus)
+        
+        # 4. Get seats for this bus
+        bus_id = schedule.bus_id
+        seats = await self.seat_repo.get_by_bus(bus_id)
+        seat_responses = [SeatResponse.model_validate(seat) for seat in seats]
+
+        # 5. Get seat layout configuration
+        seat_layout = await self.layout_repo.get_by_bus_id(bus_id)
+        layout_response = SeatLayoutResponse.model_validate(seat_layout) if seat_layout else None
+
+        # 6. Build response
+        schedule_response = await self._to_response(schedule)
+
+        return ScheduleDetailResponse(
+            **schedule_response.model_dump(),
+            bus=bus_response,
+            seats=seat_responses,
+            seat_layout=layout_response,
+            price=price_info,
+        )
+
+    async def _get_bus_detail(self, bus) -> BusResponse:
+        """Get full bus detail with features and images."""
+        response = BusResponse.model_validate(bus)
+        if bus.company:
+            response.company_name = bus.company.name
+        if bus.features:
+            response.features = [FeatureResponse.model_validate(f) for f in bus.features]
+        if bus.images:
+            response.images = [BusImageResponse.model_validate(img) for img in bus.images]
+        return response
+
     async def update_schedule(
         self,
         schedule_id: UUID,
@@ -368,7 +438,18 @@ class ScheduleService:
             response.route_destination = schedule.route.destination
         if schedule.bus:
             response.bus_number = schedule.bus.bus_number
+            response.bus_type = schedule.bus.bus_type
             if schedule.bus.company:
                 response.company_name = schedule.bus.company.name
                 response.company_logo_url = schedule.bus.company.logo_url
+                
         return response
+
+
+    def _get_time_range(self, time_of_day: str) -> tuple:
+        ranges = {
+            "morning": (time(6, 0, 0), time(11, 59, 59)),
+            "afternoon": (time(12, 0, 0), time(17, 59, 59)),
+            "night": (time(18, 0, 0), time(23, 59, 59)),
+        }
+        return ranges.get(time_of_day.lower())

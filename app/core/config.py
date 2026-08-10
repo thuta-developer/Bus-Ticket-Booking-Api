@@ -70,6 +70,16 @@ class Settings(BaseSettings):
         "image/svg+xml",
     ]
 
+
+    # 2C2P Payment
+    TWOC2P_MERCHANT_ID : str = Field(..., env="TWOC2P_MERCHANT_ID")
+    TWOC2P_SECRET_KEY : str = Field(..., env="TWOC2P_SECRET_KEY")
+    TWOC2P_BASE_URL : str = Field(..., env="TWOC2P_BASE_URL")
+    FRONTEND_RETURN_URL : str = Field(..., env="FRONTEND_RETURN_URL")
+    BACKEND_RETURN_URL : str = Field(..., env="BACKEND_RETURN_URL")
+    
+
+
     @property
     def allowed_origins(self) -> List[str]:
         value = self.ALLOWED_ORIGINS.strip()

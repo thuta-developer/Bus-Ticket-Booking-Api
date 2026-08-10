@@ -27,8 +27,8 @@ class Schedule(BaseModel):
     local_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Price for local citizens")
     foreigner_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Price for foreigners citizens")
 
-    local_festival_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Festival price for locals")
-    foreigner_festival_price = Column(Numeric(10, 2), nullable=False, default=0.00, comment="Festival price for foreigners")
+    local_festival_price = Column(Numeric(10, 2), nullable=True, comment="Festival price for locals")
+    foreigner_festival_price = Column(Numeric(10, 2), nullable=True, comment="Festival price for foreigners")
 
     # ==== Booking Window ====
     booking_open_date = Column(DateTime(timezone=True), nullable=False, comment="When booking starts")

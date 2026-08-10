@@ -1,9 +1,15 @@
-from typing import Optional
+from typing import Optional,List
 from uuid import UUID
 from datetime import datetime, time,date
 from pydantic import BaseModel, Field, field_validator, model_validator
 from decimal import Decimal
 from enum import Enum
+
+from app.schemas.bus import BusResponse
+from app.schemas.seat import SeatResponse
+from app.schemas.feature import FeatureResponse
+from app.schemas.bus_image import BusImageResponse
+from app.schemas.seat_layout import SeatLayoutResponse
 
 class ScheduleStatusEnum(str, Enum):
     ACTIVE = "active"
@@ -49,7 +55,12 @@ class ScheduleBase(BaseModel):
             if self.festival_start_date >= self.festival_end_date:
                 raise ValueError("Festival start date must be before festival end date")
 
-        if self.local_festival_price is not None or self.foreigner_festival_price is not None:
+        # Only validate festival prices if they are actually set (not None and not 0)
+        has_festival_price = (
+            (self.local_festival_price is not None and self.local_festival_price > 0)
+            or (self.foreigner_festival_price is not None and self.foreigner_festival_price > 0)
+        )
+        if has_festival_price:
             if not self.festival_start_date or not self.festival_end_date:
                 raise ValueError("Festival date range must be set when festival prices are provided")
 
@@ -95,9 +106,11 @@ class ScheduleResponse(ScheduleBase):
     bus_number: Optional[str] = None
     company_name: Optional[str] = None
     company_logo_url: Optional[str] = None
+    bus_type : Optional[str] = None
 
     class Config:
         from_attributes = True
+
 
 
 # ====== Price Calculator Helper ======
@@ -123,4 +136,22 @@ class ScheduleSearchFilter(BaseModel):
     user_type: str = "local"  # "local" or "foreigner"
     include_festival: bool = False
     include_bookable_only: bool = True
+    time_of_day: Optional[str] = Field(
+        None,
+        description="morning, afternoon, or night"
+    )
 
+class ScheduleDetailResponse(ScheduleResponse):
+    """Schedule detail with bus, seats, features, images"""
+    
+    # Bus detail (full bus info)
+    bus: Optional[BusResponse] = None
+    
+    # Seat layout
+    seats: List[SeatResponse] = Field(default_factory=list)
+    
+    # Seat layout configuration
+    seat_layout: Optional[SeatLayoutResponse] = None
+    
+    # Price calculation for the user
+    price: Optional[SchedulePriceResponse] = None
